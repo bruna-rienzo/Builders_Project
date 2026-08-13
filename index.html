@@ -512,7 +512,20 @@
           <h1>Copiloto de Inovação</h1>
         </div>
       </div>
-      <span class="badge">Protótipo</span>
+
+      <div style="display:flex;align-items:center;gap:12px">
+        <input id="ia-key-input" type="password" placeholder="Chave OpenRouter (cole aqui)" style="min-width:240px;padding:8px;border-radius:12px;border:1px solid var(--color-separator);background:var(--color-bg-secondary)" />
+
+        <select id="ia-model-select" style="padding:8px;border-radius:12px;border:1px solid var(--color-separator);background:var(--color-bg-secondary)">
+          <option value="openai/gpt-oss-20b:free">openai/gpt-oss-20b:free</option>
+          <option value="google/gemma-4-31b-it:free">google/gemma-4-31b-it:free</option>
+          <option value="nvidia/nemotron-3-ultra-550b-a55b:free">nvidia/nemotron-3-ultra-550b-a55b:free</option>
+        </select>
+
+        <button id="ia-toggle-btn" class="secondary-button" type="button" aria-pressed="false">Modo IA: Off</button>
+
+        <span class="badge">Protótipo</span>
+      </div>
     </header>
 
     <main class="app-shell">
@@ -818,75 +831,187 @@
       }
 
       async function chamarIA(tipo, contexto) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // leitura de chave e modelo diretamente dos campos com fallback para sessionStorage
+        const keyField = document.getElementById('ia-key-input');
+        const modelField = document.getElementById('ia-model-select');
+        const rawKey = keyField && keyField.value ? keyField.value.trim() : '';
+        const key = rawKey || sessionStorage.getItem('copiloto_ia_key') || '';
+        const model = (modelField && modelField.value) || sessionStorage.getItem('copiloto_ia_model') || 'openai/gpt-oss-20b:free';
+        const iaEnabled = sessionStorage.getItem('copiloto_ia_enabled') === 'true';
 
+        // prefer salvar a chave apenas na sessionStorage se foi colada no campo
+        try {
+          if (rawKey) sessionStorage.setItem('copiloto_ia_key', rawKey);
+          if (modelField && modelField.value) sessionStorage.setItem('copiloto_ia_model', modelField.value);
+        } catch (e) {
+          // ignore
+        }
+
+        // helper: mock local (mesma estrutura que antes)
+        function mockResponse(tipo, contexto) {
+          if (tipo === 'desafios') {
+            const tema = (contexto.tema || '').trim();
+            const base = [
+              { title: 'Experiência de compra mais simples', description: 'Reduzir atrito na jornada do cliente...', why: 'A experiência atual exige múltiplos passos e reduz a conversão.' },
+              { title: 'Entrega com mais previsibilidade', description: 'Melhorar a clareza das promessas logísticas...', why: 'Clientes exigem rapidez e confiança no prazo de entrega.' },
+              { title: 'Sustentabilidade visível', description: 'Tornar escolhas ecológicas mais simples de entender...', why: 'Consumidores valorizam impacto real e comunicação clara.' },
+              { title: 'Engajamento mais contínuo', description: 'Criar relação recorrente com pessoas e comunidades...', why: 'O interesse costuma cair após a primeira interação.' },
+              { title: 'Acesso mais democrático', description: 'Abaixar barreiras para participação e uso de serviços...', why: 'Soluções que exigem excesso de passos afastam usuários.' },
+              { title: 'Decisões mais guiadas', description: 'Apoiar públicos com informações e processo de escolha...', why: 'Muita informação sem orientação gera dúvida e demora.' }
+            ];
+            return base.map((item, index) => ({
+              title: tema ? `${item.title} em ${tema}` : item.title,
+              description: item.description.replace('...', `em ${tema || 'estabelecer uma proposta melhor'}.`),
+              why: item.why,
+              index,
+            }));
+          }
+
+          if (tipo === 'ideias') {
+            const desafio = (contexto.desafio || '').trim();
+            const area = (contexto.area || 'experiência do usuário').trim();
+            const publico = (contexto.publico || 'usuários e equipes').trim();
+            const restricoes = (contexto.restricoes || 'tempo e orçamento limitados').trim();
+
+            const templates = [
+              {
+                title: 'Guia de decisão em etapas',
+                description: `${desafio} pode ser atacado com uma experiência guiada, com passos claros e linguagem simples para quem precisa decidir rápido.`,
+                firstSteps: ['Mapear as 3 decisões mais frequentes', 'Criar uma sequência com linguagem direta', 'Validar com 5 usuários ou stakeholders'],
+                impact: 'Alto',
+                effort: 'Baixo',
+              },
+              {
+                title: 'Prova de valor em 30 dias',
+                description: `Uma solução mínima para ${area} pode reduzir fricção e mostrar impacto em curto prazo, com foco em ${publico}.`,
+                firstSteps: ['Definir critério principal de sucesso', 'Testar experiência com um grupo pequeno', 'Ajustar baseado no feedback'],
+                impact: 'Alto',
+                effort: 'Médio',
+              },
+              {
+                title: 'Operação com gatilhos inteligentes',
+                description: `Padrões automáticos podem apoiar a rotina da equipe e reduzir erro humano quando o contexto envolve ${restricoes}.`,
+                firstSteps: ['Identificar regras repetitivas', 'Criar fluxos simples de apoio', 'Ajustar com feedback de operação'],
+                impact: 'Médio',
+                effort: 'Médio',
+              },
+              {
+                title: 'Feedback em jornada contínua',
+                description: `Criar um canal de feedback constante permite aprender com ${publico} sem depender apenas de reuniões esporádicas.`,
+                firstSteps: ['Estabelecer pergunta principal de feedback', 'Coletar respostas em ciclos curtos', 'Priorizar ajustes com maior impacto'],
+                impact: 'Alto',
+                effort: 'Baixo',
+              },
+            ];
+
+            return templates.slice(0, 4);
+          }
+
+          return [];
+        }
+
+        // se modo IA desligado ou sem chave, usar mock
+        if (!iaEnabled || !key) {
+          return mockResponse(tipo, contexto);
+        }
+
+        // montar prompt pedindo resposta apenas com um array JSON
+        let prompt = '';
         if (tipo === 'desafios') {
-          const tema = (contexto.tema || '').trim();
-          const base = [
-            { title: 'Experiência de compra mais simples', description: 'Reduzir atrito na jornada do cliente...', why: 'A experiência atual exige múltiplos passos e reduz a conversão.' },
-            { title: 'Entrega com mais previsibilidade', description: 'Melhorar a clareza das promessas logísticas...', why: 'Clientes exigem rapidez e confiança no prazo de entrega.' },
-            { title: 'Sustentabilidade visível', description: 'Tornar escolhas ecológicas mais simples de entender...', why: 'Consumidores valorizam impacto real e comunicação clara.' },
-            { title: 'Engajamento mais contínuo', description: 'Criar relação recorrente com pessoas e comunidades...', why: 'O interesse costuma cair após a primeira interação.' },
-            { title: 'Acesso mais democrático', description: 'Abaixar barreiras para participação e uso de serviços...', why: 'Soluções que exigem excesso de passos afastam usuários.' },
-            { title: 'Decisões mais guiadas', description: 'Apoiar públicos com informações e processo de escolha...', why: 'Muita informação sem orientação gera dúvida e demora.' }
-          ];
-
-          return base.map((item, index) => ({
-            title: tema ? `${item.title} em ${tema}` : item.title,
-            description: item.description.replace('...', `em ${tema || 'estabelecer uma proposta melhor'}.`),
-            why: item.why,
-            index,
-          }));
-        }
-
-        if (tipo === 'ideias') {
+          const tema = (contexto.tema || '').trim() || 'tema genérico';
+          prompt = `Gere uma lista (array JSON) de 4 a 6 desafios ou oportunidades sobre "${tema}". Cada item deve ser um objeto com as chaves: title (string), description (string), why (string). Responda SOMENTE com o array JSON, sem código, sem explicações. Em português (BR).`;
+        } else if (tipo === 'ideias') {
           const desafio = (contexto.desafio || '').trim();
-          const area = (contexto.area || 'experiência do usuário').trim();
-          const publico = (contexto.publico || 'usuários e equipes').trim();
-          const restricoes = (contexto.restricoes || 'tempo e orçamento limitados').trim();
-
-          const templates = [
-            {
-              title: 'Guia de decisão em etapas',
-              description: `${desafio} pode ser atacado com uma experiência guiada, com passos claros e linguagem simples para quem precisa decidir rápido.`,
-              firstSteps: ['Mapear as 3 decisões mais frequentes', 'Criar uma sequência com linguagem direta', 'Validar com 5 usuários ou stakeholders'],
-              impact: 'Alto',
-              effort: 'Baixo',
-            },
-            {
-              title: 'Prova de valor em 30 dias',
-              description: `Uma solução mínima para ${area} pode reduzir fricção e mostrar impacto em curto prazo, com foco em ${publico}.`,
-              firstSteps: ['Definir critério principal de sucesso', 'Testar experiência com um grupo pequeno', 'Ajustar baseado no feedback'],
-              impact: 'Alto',
-              effort: 'Médio',
-            },
-            {
-              title: 'Operação com gatilhos inteligentes',
-              description: `Padrões automáticos podem apoiar a rotina da equipe e reduzir erro humano quando o contexto envolve ${restricoes}.`,
-              firstSteps: ['Identificar regras repetitivas', 'Criar fluxos simples de apoio', 'Ajustar com feedback de operação'],
-              impact: 'Médio',
-              effort: 'Médio',
-            },
-            {
-              title: 'Feedback em jornada contínua',
-              description: `Criar um canal de feedback constante permite aprender com ${publico} sem depender apenas de reuniões esporádicas.`,
-              firstSteps: ['Estabelecer pergunta principal de feedback', 'Coletar respostas em ciclos curtos', 'Priorizar ajustes com maior impacto'],
-              impact: 'Alto',
-              effort: 'Baixo',
-            },
-            {
-              title: 'Modelo de priorização visual',
-              description: `Uma visão simples dos ganhos e custos permite decidir melhor dentro de ${area} sem aumentar overhead da equipe.`,
-              firstSteps: ['Definir critérios de valor e esforço', 'Pintar opções em um quadro simples', 'Comparar soluções com base em evidência'],
-              impact: 'Médio',
-              effort: 'Baixo',
-            },
-          ];
-
-          return templates.slice(0, 4);
+          const area = (contexto.area || '').trim();
+          const publico = (contexto.publico || '').trim();
+          const restricoes = (contexto.restricoes || '').trim();
+          prompt = `Para o desafio: "${desafio}", gere um array JSON com 3 a 5 ideias. Cada item deve ter: title (string), description (string), firstSteps (array de strings), impact (string), effort (string). Responda SOMENTE com o array JSON, sem código, sem explicações. Traduza todas as respostas para português (BR). Contexto: área='${area}', público='${publico}', restrições='${restricoes}'.`;
+        } else {
+          return mockResponse(tipo, contexto);
         }
 
-        return [];
+        // chamada ao OpenRouter
+        try {
+          const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + key,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }] })
+          });
+
+          if (!res.ok) {
+            if (res.status === 401) {
+              alert('Chave inválida ou não autorizada. Usando modo mock.');
+            } else if (res.status === 429) {
+              alert('Limite de requisições atingido. Usando modo mock.');
+            } else {
+              alert('Erro na chamada à IA. Usando modo mock.');
+            }
+            return mockResponse(tipo, contexto);
+          }
+
+          const data = await res.json();
+
+          // extrair texto da resposta (compatível com vários formatos)
+          let text = '';
+          if (data?.choices && data.choices.length) {
+            text = data.choices[0].message?.content ?? data.choices[0].text ?? '';
+          } else if (typeof data === 'string') {
+            text = data;
+          } else if (data?.result) {
+            text = String(data.result);
+          }
+
+          if (!text) {
+            throw new Error('Resposta vazia');
+          }
+
+          // remover cercas de código e espaços
+          text = text.replace(/```json|```/gi, '').trim();
+
+          // tentar parse direto; se falhar, extrair o primeiro trecho que parece um array
+          let parsed = null;
+          try {
+            parsed = JSON.parse(text);
+          } catch (e) {
+            const first = text.indexOf('[');
+            const last = text.lastIndexOf(']');
+            if (first !== -1 && last !== -1 && last > first) {
+              const snippet = text.slice(first, last + 1);
+              try {
+                parsed = JSON.parse(snippet);
+              } catch (e2) {
+                parsed = null;
+              }
+            }
+          }
+
+          if (!Array.isArray(parsed)) {
+            alert('Formato inesperado da resposta da IA. Usando modo mock.');
+            return mockResponse(tipo, contexto);
+          }
+
+          // normalizar firstSteps para ser sempre array
+          const normalized = parsed.map((item) => {
+            if (item && item.firstSteps && !Array.isArray(item.firstSteps)) {
+              if (typeof item.firstSteps === 'string') {
+                const parts = item.firstSteps.split(/\r?\n|\s*\|\s*/).map(s => s.trim()).filter(Boolean);
+                item.firstSteps = parts;
+              } else {
+                item.firstSteps = Array.isArray(item.firstSteps) ? item.firstSteps : [];
+              }
+            }
+            return item;
+          });
+
+          return normalized;
+        } catch (err) {
+          console.error('Erro chamada IA', err);
+          alert('Erro de rede ao chamar a IA. Usando modo mock.');
+          return mockResponse(tipo, contexto);
+        }
       }
 
       document.querySelectorAll('.tab-button').forEach((button) => {
@@ -894,6 +1019,52 @@
           setTab(button.dataset.tab);
         });
       });
+
+      // inicialização dos controles de IA: ler/salvar estado na sessionStorage
+      (function initIAControls(){
+        const keyField = document.getElementById('ia-key-input');
+        const modelField = document.getElementById('ia-model-select');
+        const toggleBtn = document.getElementById('ia-toggle-btn');
+
+        function updateToggleUI(){
+          const on = sessionStorage.getItem('copiloto_ia_enabled') === 'true';
+          toggleBtn.textContent = on ? 'Modo IA: On' : 'Modo IA: Off';
+          toggleBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        }
+
+        // popular campos de sessionStorage
+        try {
+          const savedKey = sessionStorage.getItem('copiloto_ia_key');
+          if (keyField && savedKey && !keyField.value) keyField.value = savedKey;
+          const savedModel = sessionStorage.getItem('copiloto_ia_model');
+          if (modelField && savedModel) modelField.value = savedModel;
+        } catch (e) {
+          // ignore
+        }
+
+        if (toggleBtn) {
+          toggleBtn.addEventListener('click', () => {
+            const current = sessionStorage.getItem('copiloto_ia_enabled') === 'true';
+            sessionStorage.setItem('copiloto_ia_enabled', (!current).toString());
+            updateToggleUI();
+          });
+        }
+
+        if (keyField) {
+          keyField.addEventListener('blur', () => {
+            try { sessionStorage.setItem('copiloto_ia_key', keyField.value.trim()); } catch (e){}
+          });
+        }
+
+        if (modelField) {
+          modelField.addEventListener('change', () => {
+            try { sessionStorage.setItem('copiloto_ia_model', modelField.value); } catch(e){}
+          });
+        }
+
+        updateToggleUI();
+      })();
+
 
       document.getElementById('gerarDesafiosBtn').addEventListener('click', async () => {
         const tema = document.getElementById('temaInput').value.trim();
