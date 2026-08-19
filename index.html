@@ -1045,8 +1045,27 @@
         if (toggleBtn) {
           toggleBtn.addEventListener('click', () => {
             const current = sessionStorage.getItem('copiloto_ia_enabled') === 'true';
-            sessionStorage.setItem('copiloto_ia_enabled', (!current).toString());
+            const next = (!current);
+            sessionStorage.setItem('copiloto_ia_enabled', next.toString());
             updateToggleUI();
+
+            // Trigger: when IA is enabled, ensure a working default model is selected.
+            if (next) {
+              try {
+                const preferred = sessionStorage.getItem('copiloto_ia_last_working_model');
+                // If a previously working model was recorded, use it; otherwise pick a reasonable fallback
+                const fallbackModel = 'google/gemma-4-31b-it:free';
+                const toUse = preferred || (modelField ? modelField.value : '') || fallbackModel;
+                if (modelField && modelField.value !== toUse) {
+                  modelField.value = toUse;
+                  sessionStorage.setItem('copiloto_ia_model', toUse);
+                }
+                // Inform the user briefly
+                setTimeout(() => alert('Modo IA ativado. Modelo definido para "' + toUse + '" para garantir funcionamento. Você pode alterar nas configurações.'), 100);
+              } catch (e) {
+                // ignore storage errors
+              }
+            }
           });
         }
 
