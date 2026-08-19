@@ -1104,15 +1104,22 @@
 
       // Delegated handler for save-edited-idea buttons (works after re-renders)
       document.addEventListener('click', (event) => {
-        const btn = event.target.closest && event.target.closest('.save-edited-idea');
+        const btn = event.target && event.target.closest ? event.target.closest('.save-edited-idea') : null;
+        console.log('Delegated click event', { target: event.target, matched: !!btn });
         if (!btn) return;
         try {
+          console.log('Save-edited button clicked');
           const article = btn.closest('.saved-card');
-          if (!article) return;
+          if (!article) {
+            console.warn('Botão sem artigo pai .saved-card');
+            return;
+          }
           const id = article.dataset.id;
           const titleInput = article.querySelector('.saved-title');
           const descriptionInput = article.querySelector('.saved-description');
           const detailInput = article.querySelector('.saved-detail');
+
+          console.log('Fields found', { id, titleInputExists: !!titleInput, descriptionInputExists: !!descriptionInput, detailInputExists: !!detailInput });
 
           let index = -1;
           if (id) index = state.ideas.findIndex((item) => item.id === id);
@@ -1121,6 +1128,8 @@
             const articles = Array.from(list.querySelectorAll('.saved-card'));
             index = articles.indexOf(article);
           }
+
+          console.log('Resolved index for idea', index);
 
           if (index === -1 || !state.ideas[index]) {
             console.warn('Não foi possível localizar a ideia para salvar (id/posição).');
@@ -1133,6 +1142,7 @@
           state.ideas[index].firstSteps = detailInput.value.trim() || 'Definir próximos passos.';
 
           persistIdeas();
+          console.log('Idea saved to state', state.ideas[index]);
           renderSavedIdeas();
         } catch (err) {
           console.error('Erro ao salvar ideia editada (delegado)', err);
