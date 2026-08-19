@@ -732,41 +732,6 @@
           });
         });
 
-        document.querySelectorAll('.save-edited-idea').forEach((button) => {
-          button.addEventListener('click', (event) => {
-            try {
-              const article = event.target.closest('.saved-card');
-              const id = article && article.dataset ? article.dataset.id : undefined;
-              const titleInput = article.querySelector('.saved-title');
-              const descriptionInput = article.querySelector('.saved-description');
-              const detailInput = article.querySelector('.saved-detail');
-
-              // Tentar localizar por id; se falhar, usar posição no DOM como fallback
-              let index = -1;
-              if (id) index = state.ideas.findIndex((item) => item.id === id);
-              if (index === -1) {
-                const list = document.getElementById('savedIdeasList');
-                const articles = Array.from(list.querySelectorAll('.saved-card'));
-                index = articles.indexOf(article);
-              }
-
-              if (index === -1 || !state.ideas[index]) {
-                console.warn('Não foi possível localizar a ideia para salvar (id/posição).');
-                return;
-              }
-
-              state.ideas[index].title = titleInput.value.trim() || 'Nova ideia';
-              state.ideas[index].description = descriptionInput.value.trim() || 'Sem descrição adicionada.';
-              state.ideas[index].firstSteps = detailInput.value.trim() || 'Definir próximos passos.';
-
-              persistIdeas();
-              renderSavedIdeas();
-            } catch (err) {
-              console.error('Erro ao salvar ideia editada', err);
-              alert('Não foi possível salvar a ideia. Veja o console para detalhes.');
-            }
-          });
-        });
       }
 
       function renderChallengeCards(items) {
@@ -1134,6 +1099,44 @@
           renderIdeaCards(ideias);
         } finally {
           setLoading('ideiasLoading', false);
+        }
+      });
+
+      // Delegated handler for save-edited-idea buttons (works after re-renders)
+      document.addEventListener('click', (event) => {
+        const btn = event.target.closest && event.target.closest('.save-edited-idea');
+        if (!btn) return;
+        try {
+          const article = btn.closest('.saved-card');
+          if (!article) return;
+          const id = article.dataset.id;
+          const titleInput = article.querySelector('.saved-title');
+          const descriptionInput = article.querySelector('.saved-description');
+          const detailInput = article.querySelector('.saved-detail');
+
+          let index = -1;
+          if (id) index = state.ideas.findIndex((item) => item.id === id);
+          if (index === -1) {
+            const list = document.getElementById('savedIdeasList');
+            const articles = Array.from(list.querySelectorAll('.saved-card'));
+            index = articles.indexOf(article);
+          }
+
+          if (index === -1 || !state.ideas[index]) {
+            console.warn('Não foi possível localizar a ideia para salvar (id/posição).');
+            alert('Não foi possível localizar a ideia para salvar.');
+            return;
+          }
+
+          state.ideas[index].title = titleInput.value.trim() || 'Nova ideia';
+          state.ideas[index].description = descriptionInput.value.trim() || 'Sem descrição adicionada.';
+          state.ideas[index].firstSteps = detailInput.value.trim() || 'Definir próximos passos.';
+
+          persistIdeas();
+          renderSavedIdeas();
+        } catch (err) {
+          console.error('Erro ao salvar ideia editada (delegado)', err);
+          alert('Erro ao salvar a ideia. Veja o console para mais detalhes.');
         }
       });
 
