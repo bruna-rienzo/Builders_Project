@@ -734,23 +734,37 @@
 
         document.querySelectorAll('.save-edited-idea').forEach((button) => {
           button.addEventListener('click', (event) => {
-            const article = event.target.closest('.saved-card');
-            const id = article.dataset.id;
-            const titleInput = article.querySelector('.saved-title');
-            const descriptionInput = article.querySelector('.saved-description');
-            const detailInput = article.querySelector('.saved-detail');
+            try {
+              const article = event.target.closest('.saved-card');
+              const id = article && article.dataset ? article.dataset.id : undefined;
+              const titleInput = article.querySelector('.saved-title');
+              const descriptionInput = article.querySelector('.saved-description');
+              const detailInput = article.querySelector('.saved-detail');
 
-            const idea = state.ideas.find((item) => item.id === id);
-            if (!idea) {
-              return;
+              // Tentar localizar por id; se falhar, usar posição no DOM como fallback
+              let index = -1;
+              if (id) index = state.ideas.findIndex((item) => item.id === id);
+              if (index === -1) {
+                const list = document.getElementById('savedIdeasList');
+                const articles = Array.from(list.querySelectorAll('.saved-card'));
+                index = articles.indexOf(article);
+              }
+
+              if (index === -1 || !state.ideas[index]) {
+                console.warn('Não foi possível localizar a ideia para salvar (id/posição).');
+                return;
+              }
+
+              state.ideas[index].title = titleInput.value.trim() || 'Nova ideia';
+              state.ideas[index].description = descriptionInput.value.trim() || 'Sem descrição adicionada.';
+              state.ideas[index].firstSteps = detailInput.value.trim() || 'Definir próximos passos.';
+
+              persistIdeas();
+              renderSavedIdeas();
+            } catch (err) {
+              console.error('Erro ao salvar ideia editada', err);
+              alert('Não foi possível salvar a ideia. Veja o console para detalhes.');
             }
-
-            idea.title = titleInput.value.trim() || 'Nova ideia';
-            idea.description = descriptionInput.value.trim() || 'Sem descrição adicionada.';
-            idea.firstSteps = detailInput.value.trim() || 'Definir próximos passos.';
-
-            persistIdeas();
-            renderSavedIdeas();
           });
         });
       }
